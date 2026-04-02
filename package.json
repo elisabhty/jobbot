@@ -1,0 +1,24 @@
+{
+  "name": "jobbot-whatsapp",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp qui trouve des offres d'emploi et postule automatiquement",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "setup-db": "node db.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "twilio": "^4.23.0",
+    "@anthropic-ai/sdk": "^0.39.0",
+    "better-sqlite3": "^11.0.0",
+    "node-cron": "^3.0.3",
+    "pdf-parse": "^1.1.1",
+    "stripe": "^14.0.0",
+    "dotenv": "^16.4.0",
+    "axios": "^1.7.0",
+    "nodemailer": "^6.9.0",
+    "pdfkit": "^0.15.0"
+  }
+}
