@@ -440,6 +440,33 @@ const Messages = {
   },
 };
 
+function toPlainText(message) {
+  let body = message.body || "";
+  if (message.type === "buttons" && message.buttons) {
+    body += "\n\n";
+    message.buttons.forEach((btn, i) => {
+      body += `${i + 1}️⃣ ${btn.title}\n`;
+    });
+    body += "\n_Répondez avec le numéro ou tapez votre réponse_";
+  }
+  if (message.type === "list" && message.sections) {
+    body += "\n\n";
+    let idx = 1;
+    for (const section of message.sections) {
+      if (section.title) body += `*${section.title}*\n`;
+      for (const item of section.items) {
+        body += `${idx}️⃣ *${item.title}*`;
+        if (item.description) body += ` — ${item.description}`;
+        body += "\n";
+        idx++;
+      }
+      body += "\n";
+    }
+    body += "_Répondez avec le numéro ou tapez votre réponse_";
+  }
+  return body;
+}
+
 module.exports = {
   text,
   buttons,
@@ -447,6 +474,7 @@ module.exports = {
   buttonsWithFreeText,
   listWithOther,
   sendMessage,
+  toPlainText,
   parseInteractiveResponse,
   Messages,
 };

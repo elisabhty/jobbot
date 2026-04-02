@@ -56,19 +56,22 @@ app.post("/webhook/whatsapp", async (req, res) => {
 
     const reply = await handleMessage(from, body, mediaUrl, mediaType);
 
-    // Toujours répondre 200 à Twilio immédiatement (évite le timeout et le double-envoi)
-    res.type("text/xml").send("<Response></Response>");
+    const twiml = new twilio.twiml.MessagingResponse();
 
-    // Ensuite envoyer la réponse via l'API Twilio
     if (typeof reply === "string" && reply) {
-      await UI.sendMessage(from, { type: "text", body: reply });
+      twiml.message(reply);
     } else if (reply && reply.type) {
-      await UI.sendMessage(from, reply);
+      // Convertit boutons/listes en texte simple pour le sandbox
+      twiml.message(UI.toPlainText(reply));
     }
+
+    res.type("text/xml").send(twiml.toString());
   } catch (error) {
     console.error("Webhook error:", error);
     if (!res.headersSent) {
-      res.type("text/xml").send("<Response></Response>");
+      const twiml = new twilio.twiml.MessagingResponse();
+      twiml.message("❌ Une erreur est survenue. Réessayez.");
+      res.type("text/xml").send(twiml.toString());
     }
   }
 });
