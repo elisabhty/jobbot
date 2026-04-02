@@ -115,25 +115,12 @@ async function sendMessage(to, message) {
   const client = getClient();
   const from = process.env.TWILIO_WHATSAPP_NUMBER;
 
+  // En sandbox Twilio, le Content API (boutons interactifs) n'est pas supporté.
+  // On envoie toujours en texte simple avec numéros en fallback.
   try {
-    switch (message.type) {
-      case "buttons":
-        return await sendInteractiveButtons(client, from, to, message);
-
-      case "list":
-        return await sendInteractiveList(client, from, to, message);
-
-      case "text":
-      default:
-        return await client.messages.create({
-          from, to,
-          body: message.body || message,
-        });
-    }
+    return await sendAsFallbackText(client, from, to, message);
   } catch (e) {
     console.error("Send message error:", e.message);
-    // Fallback to text if interactive message fails (e.g. sandbox limitations)
-    return await sendAsFallbackText(client, from, to, message);
   }
 }
 
