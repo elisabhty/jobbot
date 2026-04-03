@@ -52,13 +52,19 @@ app.post("/webhook/whatsapp", async (req, res) => {
     const twiml = new twilio.twiml.MessagingResponse();
 
     if (typeof reply === "string" && reply) {
+      console.log(`[TWIML] Sending string: ${reply.slice(0,50)}`);
       twiml.message(reply);
     } else if (reply && reply.type) {
-      // Convertit boutons/listes en texte simple pour le sandbox
-      twiml.message(UI.toPlainText(reply));
+      const plain = UI.toPlainText(reply);
+      console.log(`[TWIML] Sending plaintext: ${plain.slice(0,80)}`);
+      twiml.message(plain);
+    } else {
+      console.log(`[TWIML] Empty reply, sending empty response`);
     }
 
-    res.type("text/xml").send(twiml.toString());
+    const xml = twiml.toString();
+    console.log(`[TWIML XML] ${xml.slice(0,150)}`);
+    res.type("text/xml").send(xml);
   } catch (error) {
     console.error("Webhook error:", error);
     if (!res.headersSent) {
