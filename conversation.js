@@ -37,6 +37,51 @@ async function handleMessage(phone, body, mediaUrl, mediaType) {
   // === Commandes globales ===
   // === Commandes globales ===
 
+  if (["salut", "bonjour", "hello", "hi", "coucou", "hey"].includes(lower)) {
+    // Menu contextuel selon l'état actuel
+    if (state === "active") {
+      return UI.buttons(
+        `👋 Salut ${user.name?.split(" ")[0] || ""} ! Que souhaitez-vous faire ?`,
+        [
+          { id: "menu_chercher",  title: "🔍 Chercher des offres" },
+          { id: "menu_statut",   title: "📊 Mon statut" },
+          { id: "menu_modifier", title: "⚙️ Modifier mon profil" },
+        ]
+      );
+    }
+    if (state === "waiting_cv") {
+      return "👋 Salut ! Envoyez votre CV en PDF pour commencer.";
+    }
+    if (["asking_city","asking_mobility","asking_other_cities","asking_countries","asking_contract","asking_workmode","asking_weekend","confirm"].includes(state)) {
+      return UI.buttons(
+        "👋 On était en train de configurer votre profil. Que voulez-vous faire ?",
+        [
+          { id: "menu_continue", title: "▶️ Continuer" },
+          { id: "menu_restart",  title: "🔄 Recommencer" },
+          { id: "menu_statut",   title: "📊 Mon statut" },
+        ]
+      );
+    }
+    // Fallback
+    return UI.buttons(
+      "👋 Salut ! Que souhaitez-vous faire ?",
+      [
+        { id: "menu_cv",       title: "📄 Nouveau CV" },
+        { id: "menu_chercher", title: "🔍 Chercher des offres" },
+        { id: "menu_statut",   title: "📊 Mon statut" },
+      ]
+    );
+  }
+
+  // Gestion des réponses au menu contextuel
+  if (lower === "menu_chercher") { sendWhatsApp(phone, "🔍 Recherche lancée..."); triggerJobSearch(phone); return null; }
+  if (lower === "menu_statut")   { return handleMessage(phone, "statut", null, null); }
+  if (lower === "menu_modifier") { return handleMessage(phone, "/modifier", null, null); }
+  if (lower === "menu_continue") { return "▶️ Reprenons ! Continuez à répondre à la question précédente, ou tapez *aide* pour voir les options disponibles."; }
+  if (lower === "menu_restart")  { updateUser(phone, { conversation_state: "waiting_cv" }); return "🔄 On recommence ! Envoyez votre CV en PDF."; }
+  if (lower === "menu_cv")       { updateUser(phone, { conversation_state: "updating_cv" }); return "📄 Envoyez votre nouveau CV en PDF."; }
+
+
   if (lower === "stop" || lower.startsWith("pause")) {
     // /pause [durée] → pause temporaire avec auto-reprise
     let pausedUntil = null;
@@ -191,8 +236,8 @@ async function handleMessage(phone, body, mediaUrl, mediaType) {
 
       if (isOnlyHere && !isOtherCities && !isInternational) {
         convData.countries = [guessCountry(convData.currentCity)];
-        updateUser(phone, { target_cities: JSON.stringify(convData.cities), target_countries: JSON.stringify(convData.countries), conversation_state: "asking_salary", conversation_data: JSON.stringify(convData) });
-        return `👍 Recherche à ${convData.currentCity} uniquement.\n\n💰 *Salaire minimum annuel brut ?*\n_Ex: 35000 ou "pas de minimum"_`;
+        updateUser(phone, { target_cities: JSON.stringify(convData.cities), target_countries: JSON.stringify(convData.countries), conversation_state: "asking_contract", conversation_data: JSON.stringify(convData) });
+        return `👍 Recherche à ${convData.currentCity} uniquement.\n_Ex: 35000 ou "pas de minimum"_`;
       }
 
       if (isOtherCities && !isInternational && !isBoth) {
@@ -210,7 +255,7 @@ async function handleMessage(phone, body, mediaUrl, mediaType) {
         return "🇫🇷 D'abord la France — *quelles autres villes ?*\n_Séparées par des virgules, ou \"toute la France\"_";
       }
 
-      return UI.Messages.askMobility(convData.currentCity);
+      return UI.Messages.askMobility(convData.currentCity || "votre ville");
 
     case "asking_other_cities":
       if (lower.includes("toute la france") || lower.includes("partout")) {
@@ -226,8 +271,8 @@ async function handleMessage(phone, body, mediaUrl, mediaType) {
         return `✅ France : *${convData.cities.join(", ")}*\n\n🌍 Maintenant, *quels pays à l'international ?*\n_Ex: Canada, Belgique_`;
       }
 
-      updateUser(phone, { target_cities: JSON.stringify(convData.cities), target_countries: JSON.stringify(convData.countries), conversation_state: "asking_salary", conversation_data: JSON.stringify(convData) });
-      return `✅ Recherche : *${convData.cities.join(", ")}*\n\n💰 *Salaire minimum annuel brut ?*`;
+      updateUser(phone, { target_cities: JSON.stringify(convData.cities), target_countries: JSON.stringify(convData.countries), conversation_state: "asking_contract", conversation_data: JSON.stringify(convData) });
+      return `✅ Recherche : *${convData.cities.join(", ")}*`;
 
     case "asking_countries":
       const countries = body.split(",").map(c => c.trim()).filter(Boolean);
@@ -244,13 +289,13 @@ async function handleMessage(phone, body, mediaUrl, mediaType) {
         return `🌍 Pays notés.\n\n📄 Envoyez votre CV en *${neededLangs.map(langCodeToName).join(", ")}* pour maximiser vos chances.\nOu *skip* pour continuer avec votre CV actuel.`;
       }
 
-      updateUser(phone, { target_countries: JSON.stringify(convData.countries), international_mobile: 1, conversation_state: "asking_salary", conversation_data: JSON.stringify(convData) });
-      return `🌍 Pays notés : *${convData.countries.join(", ")}*\n\n💰 *Salaire minimum annuel brut ?*`;
+      updateUser(phone, { target_countries: JSON.stringify(convData.countries), international_mobile: 1, conversation_state: "asking_contract", conversation_data: JSON.stringify(convData) });
+      return `🌍 Pays notés : *${convData.countries.join(", ")}*`;
 
     case "asking_other_cv":
       if (lower === "skip" || lower === "passer") {
-        updateUser(phone, { conversation_state: "asking_salary", conversation_data: JSON.stringify(convData) });
-        return "👍 On continue avec votre CV actuel.\n\n💰 *Salaire minimum annuel brut ?*";
+        updateUser(phone, { conversation_state: "asking_contract", conversation_data: JSON.stringify(convData) });
+        return "👍 On continue avec votre CV actuel.";
       }
       if (mediaUrl && mediaType?.includes("pdf")) {
         try {
@@ -258,42 +303,50 @@ async function handleMessage(phone, body, mediaUrl, mediaType) {
           const pdf = await pdfParse(Buffer.from(res.data));
           const profile = await parseCV(pdf.text);
           convData.languages.push({ lang: profile.language, cv_provided: true });
-          updateUser(phone, { languages: JSON.stringify(convData.languages), conversation_state: "asking_salary", conversation_data: JSON.stringify(convData) });
-          return `✅ CV en *${langCodeToName(profile.language)}* reçu !\n\n💰 *Salaire minimum annuel brut ?*`;
+          updateUser(phone, { languages: JSON.stringify(convData.languages), conversation_state: "asking_contract", conversation_data: JSON.stringify(convData) });
+          return `✅ CV en *${langCodeToName(profile.language)}* reçu !`;
         } catch (e) { return "❌ Erreur. Réessayez ou *skip*."; }
       }
       return "📄 Envoyez le PDF ou *skip*.";
 
-    case "asking_salary":
-      convData.salary = lower.includes("pas de") || lower.includes("aucun") || lower === "0" ? "0" : body.replace(/[^0-9]/g, "") || "0";
-      updateUser(phone, { target_salary: convData.salary, conversation_state: "asking_contract", conversation_data: JSON.stringify(convData) });
-      return UI.Messages.askContract();
-
-    case "asking_contract":
-      // Handle button IDs from interactive list
+    case "asking_contract": {
       const contractIdMap = { cdi: "CDI", cdd: "CDD", interim: "Intérim", freelance: "Freelance", alternance: "Alternance", stage: "Stage", etudiant: "Job étudiant", vie: "VIE", via: "VIA", all: "Tous types" };
-      // Handle numbered text responses too
       const contractNumMap = { "1": "CDI", "2": "CDD", "3": "Intérim", "4": "Freelance", "5": "Alternance", "6": "Stage", "7": "Job étudiant", "8": "VIE", "9": "VIA", "10": "Tous types" };
 
-      if (contractIdMap[lower]) {
-        convData.contractType = contractIdMap[lower];
-      } else if (contractNumMap[lower.replace(/\s/g, "").split(",")[0]]) {
-        const nums = lower.replace(/\s/g, "").split(",");
-        convData.contractType = nums.map(n => contractNumMap[n]).filter(Boolean).join(", ") || body.trim();
-      } else {
-        convData.contractType = body.trim();
+      // Parsing : on accepte plusieurs types séparés par virgule, +, ou "et"
+      const rawTypes = lower.replace(/\bet\b/g, ",").replace(/\+/g, ",").split(",").map(s => s.trim()).filter(Boolean);
+      const resolved = rawTypes.map(r => contractIdMap[r] || contractNumMap[r] || null).filter(Boolean);
+
+      if (resolved.length === 0 && !body.trim()) {
+        // Réponse vide ou incomprise — redemander
+        return `❓ Je n'ai pas compris. Choisissez dans la liste ou tapez votre réponse.\n_Ex : CDI, VIE, Alternance_\n\n` + UI.Messages.askContract();
       }
 
-      // VIE/VIA-specific: auto-enable international if not already
+      convData.contractType = resolved.length > 0 ? resolved.join(", ") : body.trim();
+
       const isVIE = convData.contractType.includes("VIE");
       const isVIA = convData.contractType.includes("VIA");
       const isInternationalContract = isVIE || isVIA;
+
+      // ── Vérification VIE/France ──
+      // Le VIE est une mission à l'étranger — incompatible avec une recherche uniquement en France
+      if (isVIE) {
+        const targetCountries = convData.countries || [];
+        const onlyFrance = targetCountries.length === 0 || (targetCountries.every(c => c.toLowerCase() === "france"));
+        if (onlyFrance) {
+          // Demander les pays de destination VIE — on ne peut pas faire VIE en France
+          convData.includesVIE = true;
+          updateUser(phone, { conversation_state: "asking_vie_countries", conversation_data: JSON.stringify(convData) });
+          return `ℹ️ *Le VIE est une mission à l'étranger* — il n'est pas possible de faire un VIE en France.\n\n🌍 *Dans quels pays souhaitez-vous chercher un VIE ?*\n_Ex: Allemagne, Singapour, Canada, USA_\n_Ou tapez "tous" pour chercher partout_`;
+        }
+      }
+
       if (isInternationalContract && !convData.countries?.some(c => c.toLowerCase() !== "france")) {
         convData.includesVIE = isVIE;
         convData.includesVIA = isVIA;
         const typeLabel = isVIE && isVIA ? "VIE/VIA" : isVIE ? "VIE" : "VIA";
         updateUser(phone, { conversation_state: "asking_vie_countries", conversation_data: JSON.stringify(convData) });
-        return `🌍 Le ${typeLabel} est par définition à l'international !\n\n*Dans quels pays souhaitez-vous chercher ?*\n\n_Ex: Allemagne, UK, Singapour, USA_\n_Ou tapez "tous" pour chercher partout_`;
+        return `🌍 Le ${typeLabel} est par définition à l'international !\n\n*Dans quels pays souhaitez-vous chercher ?*\n_Ex: Allemagne, UK, Singapour, USA_\n_Ou tapez "tous" pour chercher partout_`;
       }
 
       if (isVIE) convData.includesVIE = true;
@@ -301,6 +354,7 @@ async function handleMessage(phone, body, mediaUrl, mediaType) {
 
       updateUser(phone, { conversation_state: "asking_workmode", conversation_data: JSON.stringify(convData) });
       return UI.Messages.askWorkMode();
+    }
 
     case "asking_vie_countries":
       if (lower === "tous" || lower === "tout" || lower.includes("partout")) {
@@ -343,9 +397,10 @@ async function handleMessage(phone, body, mediaUrl, mediaType) {
       } else if (modeNumMap[lower.replace(/\s/g, "").split(",")[0]]) {
         const nums = lower.replace(/\s/g, "").split(",");
         convData.workMode = nums.map(n => modeNumMap[n]).filter(Boolean).join(", ") || body.trim();
-      } else {
-        // Free text — user typed something custom
+      } else if (body.trim().length > 1) {
         convData.workMode = body.trim();
+      } else {
+        return `❓ Je n'ai pas compris. Choisissez :\n1️⃣ Sur site\n2️⃣ Hybride\n3️⃣ Full remote\n4️⃣ Peu importe\n\n_Ou tapez votre préférence_`;
       }
 
       updateUser(phone, { conversation_state: "asking_weekend", conversation_data: JSON.stringify(convData) });
@@ -359,8 +414,18 @@ async function handleMessage(phone, body, mediaUrl, mediaType) {
       );
 
     case "asking_weekend":
-      const wantsSilent = lower === "weekend_silent" || lower === "1" || lower.includes("pas") || lower.includes("non") || lower.includes("silence") || lower.includes("tranquille");
-      const wantsActive = lower === "weekend_active" || lower === "2" || lower === "oui" || lower.includes("7j") || lower.includes("tous les jours") || lower.includes("week-end");
+      const wantsSilent = lower === "weekend_silent" || lower === "1" || lower.includes("pas") || lower.includes("non") || lower.includes("silence") || lower.includes("tranquille") || lower.includes("lun") || lower.includes("sem");
+      const wantsActive = lower === "weekend_active" || lower === "2" || lower === "oui" || lower.includes("7j") || lower.includes("tous les jours") || lower.includes("week-end") || lower.includes("weekend");
+
+      if (!wantsSilent && !wantsActive) {
+        return UI.buttons(
+          "❓ Je n'ai pas compris. Quand souhaitez-vous recevoir les offres ?",
+          [
+            { id: "weekend_silent", title: "📅 Lun-Ven seulement" },
+            { id: "weekend_active", title: "📬 7j/7" },
+          ]
+        );
+      }
 
       if (wantsSilent || (!wantsActive)) {
         convData.weekendSilent = true;
@@ -375,7 +440,6 @@ async function handleMessage(phone, body, mediaUrl, mediaType) {
       recap += `💼 ${convData.profile?.job_title || user.target_job_title}\n`;
       recap += `📍 ${(convData.cities || []).join(", ")}\n`;
       recap += `🌍 ${(convData.countries || []).join(", ")}\n`;
-      recap += `💰 ${convData.salary === "0" ? "Pas de minimum" : convData.salary + "€/an"}\n`;
       recap += `📄 Contrat : ${convData.contractType}\n`;
       recap += `🏠 Mode : ${convData.workMode}\n`;
       recap += `🗓️ Notifications : ${convData.weekendSilent ? "Tous les jours sauf le week-end" : "Tous les jours (7j/7)"}\n`;
@@ -659,8 +723,11 @@ async function handleMessage(phone, body, mediaUrl, mediaType) {
       }
 
       if (lower === "/modifier" || lower === "modifier mes critères" || lower === "modifier mes criteres") {
+        const cities = JSON.parse(user.target_cities || "[]").join(", ") || "—";
+        const contract = user.contract_type || "—";
+        const workmode = user.work_mode || "—";
         return UI.buttons(
-          "⚙️ *Que souhaitez-vous modifier ?*",
+          `⚙️ *Que souhaitez-vous modifier ?*\n\n📍 Villes : _${cities}_\n📄 Contrat : _${contract}_\n🏠 Mode : _${workmode}_`,
           [
             { id: "modify_city",     title: "📍 Ville(s)" },
             { id: "modify_contract", title: "📄 Type de contrat" },
